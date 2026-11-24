@@ -29,8 +29,29 @@ The audit sampled pinned files from GitHub. It did not exercise upstream product
 
 **H3.** Authenticated, independently collected manifests could make the comparison useful for a decision service. Validate issuer policy, signature, freshness, replay resistance and the execution-time boundary with a future trusted collector. A passing equality check currently provides no evidence for H3.
 
+## Recorded experiment — OpenTofu local backend
+
+OpenTofu v1.13.9, commit `c83e7e50daff10ac704cb0811e9ffd0ad2523759`, Windows amd64, with Node.js 24.22.3. The downloaded Windows ZIP matched SHA-256 `b23a811741911baa829aa7d3d3718626c549e8934546822b0e9b99b9fba75e4e` from the release checksum file. The release checksum was checked against the downloaded bytes. Its signature was not independently verified. [OpenTofu release](https://github.com/opentofu/opentofu/releases/tag/v1.13.9)
+
+Run from the repository root with Git and Node available. Supply the full path to a verified OpenTofu executable.
+
+```sh
+node experiments/opentofu-local.mjs /absolute/path/to/tofu
+```
+
+The script uses a temporary local backend with the built-in `terraform_data` resource. It requires no external provider, remote backend or cloud account. It hashes the exact bytes of the configuration file, saved plan and local state. It records a real Git commit and changes the working tree without creating a new commit. The approval digest is a simulated assertion.
+
+| Scenario | Native OpenTofu observation | CLI comparison |
+| --- | --- | --- |
+| Baseline | Reviewed plan saved at state serial 1 | All six checks pass |
+| Replan with changed working-tree input and unchanged Git HEAD | Second saved plan created successfully | Plan, inputs and simulated approval binding mismatch. Commit and state still match. |
+| Apply reviewed saved plan after editing the checkout | Exit 0, output is the saved value `reviewed` | Inputs mismatch. Plan digest and simulated approval binding still match. |
+| Apply the second saved plan after the first apply | Exit 1, `Saved plan is stale`. State lineage stayed constant and serial advanced from 1 to 2. | State digest is the only mismatch when the second plan has its own simulated approval. |
+
+The fixture shows two distinct observations. A saved plan can apply the values captured during planning even after local configuration changes. OpenTofu already rejects this stale-state case itself. The CLI's input mismatch describes the caller's decision to compare against the live checkout. It does not show an OpenTofu defect. This experiment does not observe Atlantis approval behavior, authorized reviewers, external drift, or operator outcomes.
+
 ## Verification and release criteria
 
-The synthetic Node suite exercises matching claims, six mismatch dimensions, missing evidence, precedence, malformed input and committed examples. It checks that the result stays unverified and cannot authorize execution. The suite measures the implemented comparison semantics. Upstream behavior and real-world novelty remain untested.
+The synthetic Node suite exercises matching claims, six mismatch dimensions, missing evidence, precedence, malformed input and committed examples. It checks that the result stays unverified and cannot authorize execution. The suite measures the implemented comparison semantics. The OpenTofu run above adds one observed native workflow. Atlantis and OpenTaco runtime behavior, authenticated approval, and real-world novelty remain unverified.
 
-Before publishing a version, require passing checks on the exact PR revision, independent maintainer review and a reproducible workflow comparison with recorded observations. Keep this advisory prototype separate from any production enforcement. A production claim would additionally require independently verified provenance and an execution-time freshness control.
+Before publishing a version, require passing checks on the exact PR revision, independent maintainer review and a reproducible workflow comparison with recorded observations. The local OpenTofu run meets the baseline workflow comparison. A claim about PR approval behavior would require an Atlantis workflow experiment. Keep this advisory prototype separate from any production enforcement. A production claim would additionally require independently verified provenance and an execution-time freshness control.
